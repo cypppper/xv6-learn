@@ -1,0 +1,4 @@
+usertrap
+7, the encode number of syscall "exec"
+user mode
+lw	s2,0(zero) # 0 <_entry-0x80000000>,   s2
