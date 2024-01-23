@@ -103,6 +103,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 }
 
 void vmprint(pagetable_t pgtbl) {
+  printf("page table %p\n", pgtbl);
   vmprint_level(pgtbl, 1);
 }
 
