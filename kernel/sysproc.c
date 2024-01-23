@@ -70,14 +70,60 @@ sys_sleep(void)
 }
 
 
-#ifdef LAB_PGTBL
+// #ifdef LAB_PGTBL
 int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  uint64 buf_addr;
+  int npage;
+  uint64 bitmask_addr_uvm;
+  uint bitmask = 0;
+  argaddr(0, &buf_addr);
+  argint(1, &npage);
+  argaddr(2, &bitmask_addr_uvm);
+
+  for (int i = 0; i < npage; i++) {
+    pte_t *pte_p = walk(myproc()->pagetable, 
+                        buf_addr + i * PGSIZE, 0);
+    
+    if ((pte_p != 0) && ((*pte_p) & PTE_A)) {
+      bitmask = bitmask | (1 << i);
+      (*pte_p) = (*pte_p) & ~PTE_A;
+    }
+  }
+  printf("kernel res: %x\n", bitmask);
+  if(copyout(myproc()->pagetable, bitmask_addr_uvm, (char *)&bitmask, sizeof(uint)))
+    panic("sys_pgacess copyout error");
+
+  return 0;
+
+
+  // lab pgtbl: your code here.
+  int n;  // number of page
+  // bufAddr: the first user page
+  // abitsAddr
+  uint64 bufAddr, abits, bitsmask=0;
+  // 依次将系统调用的参数取出并保存在相应的变量中
+    argaddr(2, &abits);  
+  argint(1, &n);
+  argaddr(0, &bufAddr);
+  struct proc *p = myproc();
+
+  for(int i=0;i<n;i++){
+    pte_t *pte = walk(p->pagetable, bufAddr, 0);
+    if(*pte & PTE_A) { // accessed
+      bitsmask |= (1L << i);
+    }
+    // clear the PTE_A
+    *pte &= ~PTE_A;
+    bufAddr += PGSIZE;
+  }
+  if(copyout(p->pagetable, abits, (char *)&bitsmask, sizeof(bitsmask)) < 0)
+    panic("sys_pgacess copyout error");
   return 0;
 }
-#endif
+// #endif
 
 uint64
 sys_kill(void)
