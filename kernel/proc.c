@@ -140,6 +140,8 @@ found:
     return 0;
   }
 
+  p->need_ticks = -1;
+  p->ticks_cnt = 0;
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -686,3 +688,23 @@ procdump(void)
     printf("\n");
   }
 }
+
+int sigalarm(int ticks, void (*handler)()) {
+  struct proc *p = myproc();
+
+  if (ticks == 0) {
+    p->need_ticks = -1;
+    return 0;
+  }
+  
+  p->need_ticks = ticks;
+  p->ticks_cnt = 0;
+  p->handler = (uint64)handler;
+  return 0;
+}
+
+int sigreturn(void) {
+  printf("use this!\n");
+  return 0;
+}
+
