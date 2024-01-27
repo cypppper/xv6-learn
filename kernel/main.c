@@ -4,7 +4,10 @@
 #include "riscv.h"
 #include "defs.h"
 
+
 volatile static int started = 0;
+
+extern short rt[NADDR];
 
 // start() jumps here in supervisor mode on all CPUs.
 void
@@ -31,6 +34,7 @@ main()
     userinit();      // first user process
     __sync_synchronize();
     started = 1;
+    memset((void *)rt, 0, sizeof(rt));
   } else {
     while(started == 0)
       ;

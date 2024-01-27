@@ -187,3 +187,6 @@ void            virtio_disk_intr(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+short* check_rc(short *root, uint64 addr);
+uint32 hash_addr(uint64 addr);

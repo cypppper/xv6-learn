@@ -14,6 +14,7 @@ extern char trampoline[], uservec[], userret[];
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
 
+extern short rt[NADDR];
 extern int devintr();
 
 void
@@ -67,6 +68,41 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if (r_scause() == 15) {  // write page fault
+    // printf("page fault catch!\n");
+    char *mem;
+    pte_t *pte;
+    // pte_t pte_bak;
+    uint flags;
+    uint64 pa;
+
+    if((pte = walk(p->pagetable, r_stval(), 0)) == 0)
+      panic("uvmcopy: pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("uvmcopy: page not present");
+    pa = PTE2PA(*pte);
+    short * rc_p = check_rc(rt, pa);
+    if ((*rc_p) == 1) {  // single page::pagefault
+      if (GET_COW_FLAG(*pte) == 0)
+        panic("cow bit equal 0 err");
+      *pte = RESET_COW(*pte);
+      *rc_p = 0;
+    } else {
+      if ((mem = kalloc()) == 0) {
+        printf("mem not enough!\n");
+        setkilled(p);
+      } else {
+        if (GET_COW_FLAG(*pte) == 0)
+          panic("cow bit equal 0 err");
+        memmove(mem, (void *)pa, PGSIZE);
+        flags = PTE_FLAGS(*pte);
+        *pte = 0;
+        if (mappages(p->pagetable, PGROUNDDOWN(r_stval()), PGSIZE, (uint64)mem, RESET_COW(flags)) != 0) {
+          panic("map error!");
+        }
+        *rc_p = (*rc_p) - 1;
+      }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
