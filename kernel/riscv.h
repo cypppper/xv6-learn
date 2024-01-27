@@ -361,14 +361,3 @@ typedef uint64 *pagetable_t; // 512 PTEs
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
-
-#define ADD_COW_FLAGS(pte) ((pte) | (1L << 8))
-#define DEL_WRI_FLAGS(pte) ((pte) & ~(1L << 2))
-#define ADD_WRI_FLAGS(pte) ((pte) | (1L << 2))
-
-
-#define COW(pte) ADD_COW_FLAGS(DEL_WRI_FLAGS(pte))
-#define GET_COW_FLAG(pte) ((pte) & (1L << 8))
-#define DEL_COW_FLAG(pte) ((pte) & ~(1L << 8))
-#define RESET_COW(pte)  ADD_WRI_FLAGS(DEL_COW_FLAG(pte))
-#define NADDR 32769

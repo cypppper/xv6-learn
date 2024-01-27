@@ -15,20 +15,6 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
-// struct spinlock rt_lock;
-short rt[NADDR] = {0};
-
-uint32 hash_addr(uint64 addr) {
-
-  uint32 hash = (PGROUNDDOWN(addr) >> 12) & (0xffff);
-  // printf("hash res: %d\n", hash);
-  return hash;
-}
-
-short* check_rc(short *root, uint64 addr) {
-  return &(root[hash_addr(addr)]);
-}
-
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -169,7 +155,6 @@ found:
 static void
 freeproc(struct proc *p)
 {
-  // printf("<st>freepgtbl pid: %d!\n", p->pid);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -184,7 +169,6 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
-  // printf("<ed>freepgtbl pid: %d!\n", p->pid);
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -280,12 +264,10 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
-    // printf("alloc page %d\n", n/PGSIZE);
     if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
       return -1;
     }
   } else if(n < 0){
-        // printf("free page %d\n", (-n)/PGSIZE);
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
@@ -305,6 +287,7 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
@@ -338,7 +321,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-  // printf("fork end!!!\n");
+
   return pid;
 }
 
