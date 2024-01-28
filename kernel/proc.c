@@ -686,3 +686,40 @@ procdump(void)
     printf("\n");
   }
 }
+
+struct {
+  struct spinlock lock;
+  uint counter[(PHYSTOP - KERNBASE) / PGSIZE];
+} refcnt;
+
+
+uint64 pgindex(uint64 pa){
+  return (pa - KERNBASE) / PGSIZE;
+}
+
+
+void acquire_refcnt(){
+  acquire(&refcnt.lock);
+}
+
+
+void release_refcnt(){
+  release(&refcnt.lock);
+}
+
+void refcnt_setter(uint64 pa, int n){
+  refcnt.counter[pgindex((uint64)pa)] = n;
+}
+
+
+uint refcnt_getter(uint64 pa){
+  return refcnt.counter[pgindex((uint64)pa)];
+}
+
+void refcnt_incr(uint64 pa, int n){
+  acquire(&refcnt.lock);
+  refcnt.counter[pgindex((uint64)pa)] += n;
+  release(&refcnt.lock);
+}
+
+

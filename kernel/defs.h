@@ -9,6 +9,8 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -187,3 +189,14 @@ void            virtio_disk_intr(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+void refcnt_incr(uint64 pa, int num);
+
+uint64 pgindex(uint64 pa);
+void acquire_refcnt();
+void release_refcnt();
+void refcnt_setter(uint64 pa, int n);
+uint refcnt_getter(uint64 pa);
+void refcnt_incr(uint64 pa, int n);
+int cowcopy(uint64 va);
+void *kalloc_nolock(void);
+

@@ -3090,7 +3090,7 @@ main(int argc, char *argv[])
   } else if(argc == 2 && strcmp(argv[1], "-C") == 0){
     continuous = 2;
   } else if(argc == 2 && argv[1][0] != '-'){
-    justone = argv[1];
+    justone = 0;
   } else if(argc > 1){
     printf("Usage: usertests [-c] [-C] [-q] [testname]\n");
     exit(1);
