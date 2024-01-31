@@ -30,7 +30,24 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
+  pthread_mutex_lock(&(bstate.barrier_mutex));       // acquire lock
+  // printf("enter! pid: %x\n", (int)pthread_self());
+  bstate.nthread += 1;
+  int old_state = bstate.round;
+  if (bstate.nthread == nthread) {
+    // printf("enter nthread broadcast\n");
+    bstate.round += 1;
+    bstate.nthread = 0;
+    pthread_cond_broadcast(&bstate.barrier_cond);
+  } else {
+    while(old_state == bstate.round) {
+      pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+      // printf("wakeup with nthread: %d\n", bstate.nthread);
+    }
+  }
   
+  pthread_mutex_unlock(&(bstate.barrier_mutex));
+
 }
 
 static void *

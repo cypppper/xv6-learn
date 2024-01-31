@@ -1,0 +1,2 @@
+because if 2 threads put key simultineously, they may insert key in the same place, as a result, one overwrited the other.
+
