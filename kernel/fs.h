@@ -26,6 +26,9 @@ struct superblock {
 
 #define NDIRECT 12
 #define NINDIRECT (BSIZE / sizeof(uint))
+#define NDIRECT_MINE 11
+#define NINDIRECT_LV1 256
+#define NINDIRECT_LV2 (256*256)
 #define MAXFILE (NDIRECT + NINDIRECT)
 
 // On-disk inode structure
