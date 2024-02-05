@@ -16,6 +16,11 @@
 #include "file.h"
 #include "fcntl.h"
 
+struct symlink {
+  uint cnt;
+  char link_path[MAXPATH];
+};
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -301,9 +306,12 @@ create(char *path, short type, short major, short minor)
   return 0;
 }
 
+// char* path, int omode
 uint64
 sys_open(void)
 {
+  // printf("enter open\n");
+
   char path[MAXPATH];
   int fd, omode;
   struct file *f;
@@ -313,7 +321,7 @@ sys_open(void)
   argint(1, &omode);
   if((n = argstr(0, path, MAXPATH)) < 0)
     return -1;
-
+  // printf("open path: %s\n", path);
   begin_op();
 
   if(omode & O_CREATE){
@@ -327,7 +335,38 @@ sys_open(void)
       end_op();
       return -1;
     }
+    // loop
+    // printf("open 1.0\n");
     ilock(ip);
+    // printf("open 1.1\n");
+    struct symlink sym;
+    int recur_cnt = 0;
+    if ((ip->type == T_SYMLINK) && ((omode & O_NOFOLLOW) == 0)) {
+      // printf("open path: %s\n", path);
+      while (ip->type == T_SYMLINK) {
+        recur_cnt++;
+        if (recur_cnt > 10) {
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        readi(ip, 0, (uint64)&sym, 0, sizeof(sym));
+        // printf("redirect to path: %s\n", sym.link_path);
+        iunlockput(ip);
+        ip = namei(sym.link_path);
+        if (ip == 0) {
+          end_op();
+          return -1;
+        }
+        // printf("open 2.0\n");
+        ilock(ip);
+        // printf("open 2.1\n");
+      }
+    }
+    // iunlock(ip);
+
+
+    // ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -366,7 +405,7 @@ sys_open(void)
 
   iunlock(ip);
   end_op();
-
+  // printf("finish open\n");
   return fd;
 }
 
@@ -501,5 +540,34 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  // printf("enter symlink\n");
+  char oldpath[MAXPATH], newpath[MAXPATH];
+  struct inode *ip;
+
+  if((argstr(0, oldpath, MAXPATH) < 0) || (argstr(1, newpath, MAXPATH) < 0)) {
+    return -1;
+  }
+  begin_op();
+  // ip locked
+  if ((ip = create(newpath, T_SYMLINK, 0, 0)) == 0) {
+    end_op();
+    return -1;
+  }
+
+
+  struct symlink sym;
+  sym.cnt = strlen(oldpath);
+  strncpy(sym.link_path, oldpath, sym.cnt);
+  sym.link_path[sym.cnt] = '\0';
+  writei(ip, 0, (uint64)&sym, 0, sizeof(sym));
+  iunlockput(ip);
+  end_op();
+  // printf("finish symlink\n");
   return 0;
 }

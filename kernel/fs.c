@@ -371,7 +371,7 @@ iunlockput(struct inode *ip)
 
 // Inode content
 //
-// The content (data) associated with each inode is stored
+// The content (data) associated with each inode is storedprintf
 // in blocks on the disk. The first NDIRECT block numbers
 // are listed in ip->addrs[].  The next NINDIRECT blocks are
 // listed in block ip->addrs[NDIRECT].
@@ -384,22 +384,22 @@ bmap(struct inode *ip, uint bn)
 {
   uint addr, *a;
   struct buf *bp;
-  printf("bmap1\n");
-  if (bn < NDIRECT_MINE) {
+  // printf("bmap1 bn:%d\n", bn);
+  if (bn < NDIRECT) {
     if ((addr = ip->addrs[bn]) == 0) {
       addr = balloc(ip->dev);
       if (addr == 0) {
         panic("error!");
         return 0;
       }
-
       ip->addrs[bn] = addr;
     }
-    printf("ret addr: %d\n", addr);
+    // printf("ret addr: %d\n", addr);
     return addr;
   }
-  bn -= NDIRECT_MINE;
-  printf("bmap2\n");
+  bn -= NDIRECT;
+
+  // printf("bmap2\n");
   if (bn < NINDIRECT_LV1) {
     if ((addr = ip->addrs[11]) == 0) {
       addr = balloc(ip->dev);
@@ -421,10 +421,10 @@ bmap(struct inode *ip, uint bn)
       log_write(bp);
     }
     brelse(bp);
-    printf("ret addr: %d\n", addr);
+    // printf("ret addr: %d\n", addr);
     return addr; 
   }
-  printf("bmap3\n");
+  // printf("bmap3\n");
   bn -= NINDIRECT_LV1;
 
   if (bn < NINDIRECT_LV2) {
@@ -461,7 +461,7 @@ bmap(struct inode *ip, uint bn)
       log_write(bp);
     }
     brelse(bp);
-    printf("ret addr: %d\n", addr);
+    // printf("ret addr: %d\n", addr);
     return addr;
   }
   panic("bmap: out of range");
@@ -510,7 +510,7 @@ itrunc(struct inode *ip)
   struct buf *bp, *bp2;
   uint *a, *a2;
 
-  for(i = 0; i < NDIRECT_MINE; i++){
+  for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
       ip->addrs[i] = 0;
