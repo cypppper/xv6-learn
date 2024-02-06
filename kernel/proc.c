@@ -131,7 +131,6 @@ found:
   p->pid = allocpid();
   p->state = USED;
   memset(p->vmas, 0, sizeof(struct VMA) * NVMA);
-  initlock(&(p->vma_lock), "vmalock");
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -167,7 +166,6 @@ freeproc(struct proc *p)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->pagetable) {
-    acquire(&(p->vma_lock));
     for (int i = 0; i < NVMA; i++) {
       if (p->vmas[i].is_used == 0) {
         printf("pass %d\n", i);
@@ -176,7 +174,7 @@ freeproc(struct proc *p)
       printf("unmap hit\n");
       munmap_p(p->vmas[i].virt_addr, p->vmas[i].len, p);
     }
-    release(&(p->vma_lock));
+ 
     printf("aaaaa\n");
     proc_freepagetable(p->pagetable, p->sz);
   }
@@ -330,7 +328,6 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
-  acquire(&(myproc()->vma_lock));
   memmove(np->vmas, p->vmas, sizeof(struct VMA) * NVMA);
   for (int i = 0; i < NVMA; i++) {
     if (np->vmas[i].is_used == 0) {
@@ -339,7 +336,6 @@ fork(void)
     np->vmas[i].file = filedup(p->vmas[i].file);
     lazy_map(np->pagetable, np->vmas[i].virt_addr, np->vmas[i].len);
   }
-  release(&(myproc()->vma_lock));
   pid = np->pid;
 
   release(&np->lock);
@@ -718,7 +714,6 @@ procdump(void)
 }
 
 uint64 find_free_addr(struct VMA *vmas, uint64 len) {
-  acquire(&(myproc()->vma_lock));
   uint64 st = TRAPFRAME - len;
   uint64 ed = TRAPFRAME;
   for (int i = 0; i < NVMA; i++) {
@@ -729,21 +724,17 @@ uint64 find_free_addr(struct VMA *vmas, uint64 len) {
       st = ed - len;
     }
   }
-  release(&(myproc()->vma_lock));
   return PGROUNDDOWN(st);
 }
 
 int find_unused_vmaidx(struct VMA *vmas) {
-  acquire(&(myproc()->vma_lock));
   for (int i = 0; i < NVMA; i++) {
     printf("enter idx: %d\n", i);
     if (vmas[i].is_used == 0) {
-      release(&(myproc()->vma_lock));
       return i;
     }
       
   }
-  release(&(myproc()->vma_lock));
   return -1;
 }
 
@@ -797,18 +788,15 @@ uint64 mmap(uint64 length, int prot, int flags, int fd) {
 }
 
 int find_inside_vmaidx(struct VMA *vmas, uint64 addr, uint64 len) {
-  acquire(&(myproc()->vma_lock));
   for (int i = 0; i < NVMA; i++) {
     if (addr >= vmas[i].virt_addr && addr < (vmas[i].len + vmas[i].virt_addr)) {
       if((addr + len) > (vmas[i].virt_addr + vmas[i].len)) {
         printf("wrong addr: %p len : %p\n", addr, len);
         panic("haha4");
       }
-      release(&(myproc()->vma_lock));
       return i;
     }
   }
-  release(&(myproc()->vma_lock));
   return -1;
 }
 
@@ -871,7 +859,7 @@ void freevma(pagetable_t pgtbl, struct VMA *vma, uint64 start, uint64 len) {
   if (vma->virt_addr == start && vma->len == len) {
     printf("  hit with para len: %d, addr: %p\n  vma len: %d addr %p\n", 
             len, start, vma->len, vma->virt_addr);
-    fileclose(vma->file);
+    // fileclose(vma->file);
     memset(vma, 0, sizeof(struct VMA));
   } else {
     if (vma->virt_addr == start) {

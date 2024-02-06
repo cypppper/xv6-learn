@@ -115,5 +115,5 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   struct VMA vmas[NVMA];
-  struct spinlock vma_lock;
+
 };
