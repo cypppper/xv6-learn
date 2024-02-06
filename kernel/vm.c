@@ -294,7 +294,7 @@ freewalk(pagetable_t pagetable)
       freewalk((pagetable_t)child);
       pagetable[i] = 0;
     } else if(pte & PTE_V){
-      printf("pid<%d>panic pte: %p, phy_addr: %p\n", myproc()->pid, pte, PTE2PA(pte));
+      // printf("pid<%d>panic pte: %p, phy_addr: %p\n", myproc()->pid, pte, PTE2PA(pte));
       panic("freewalk: leaf");
     }
   }

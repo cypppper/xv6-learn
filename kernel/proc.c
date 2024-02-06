@@ -161,21 +161,21 @@ found:
 static void
 freeproc(struct proc *p)
 {
-  printf("free pid:%d\n", p->pid);
+  // printf("free pid:%d\n", p->pid);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->pagetable) {
     for (int i = 0; i < NVMA; i++) {
       if (p->vmas[i].is_used == 0) {
-        printf("pass %d\n", i);
+        // printf("pass %d\n", i);
         continue;
       }
-      printf("unmap hit\n");
+      // printf("unmap hit\n");
       munmap_p(p->vmas[i].virt_addr, p->vmas[i].len, p);
     }
  
-    printf("aaaaa\n");
+    // printf("aaaaa\n");
     proc_freepagetable(p->pagetable, p->sz);
   }
 
@@ -729,7 +729,7 @@ uint64 find_free_addr(struct VMA *vmas, uint64 len) {
 
 int find_unused_vmaidx(struct VMA *vmas) {
   for (int i = 0; i < NVMA; i++) {
-    printf("enter idx: %d\n", i);
+    // printf("enter idx: %d\n", i);
     if (vmas[i].is_used == 0) {
       return i;
     }
@@ -791,7 +791,7 @@ int find_inside_vmaidx(struct VMA *vmas, uint64 addr, uint64 len) {
   for (int i = 0; i < NVMA; i++) {
     if (addr >= vmas[i].virt_addr && addr < (vmas[i].len + vmas[i].virt_addr)) {
       if((addr + len) > (vmas[i].virt_addr + vmas[i].len)) {
-        printf("wrong addr: %p len : %p\n", addr, len);
+        // printf("wrong addr: %p len : %p\n", addr, len);
         panic("haha4");
       }
       return i;
@@ -809,7 +809,7 @@ void freevma(pagetable_t pgtbl, struct VMA *vma, uint64 start, uint64 len) {
 
 
   for (uint64 virt_addr = st; virt_addr < ed; virt_addr += wr_len) {
-    printf("at addr: %p\n", virt_addr);
+    // printf("at addr: %p\n", virt_addr);
     pte_p = walk(pgtbl, virt_addr, 0); 
     if ((*pte_p & PTE_V) == 0) {  // not trapped
       *pte_p = 0;
@@ -857,8 +857,8 @@ void freevma(pagetable_t pgtbl, struct VMA *vma, uint64 start, uint64 len) {
     *pte_p = 0;
   }
   if (vma->virt_addr == start && vma->len == len) {
-    printf("  hit with para len: %d, addr: %p\n  vma len: %d addr %p\n", 
-            len, start, vma->len, vma->virt_addr);
+    // printf("  hit with para len: %d, addr: %p\n  vma len: %d addr %p\n", 
+            // len, start, vma->len, vma->virt_addr);
     // fileclose(vma->file);
     memset(vma, 0, sizeof(struct VMA));
   } else {
@@ -869,26 +869,26 @@ void freevma(pagetable_t pgtbl, struct VMA *vma, uint64 start, uint64 len) {
       vma->len -= len;
     }
   }
-  printf("finish freevma\n");
+  // printf("finish freevma\n");
 }
 
 int munmap(uint64 addr, uint64 len) {
-  printf("pid<%d> unmap addr: %p, len:%d\n", myproc()->pid,addr, len);
+  // printf("pid<%d> unmap addr: %p, len:%d\n", myproc()->pid,addr, len);
   struct proc* p = myproc();
   int inside_vma_idx = find_inside_vmaidx(p->vmas, addr, 0);
 
-  printf("pid<%d>  find addr: %p, len: %d\n",myproc()->pid, p->vmas[inside_vma_idx].virt_addr, p->vmas[inside_vma_idx].len);
+  // printf("pid<%d>  find addr: %p, len: %d\n",myproc()->pid, p->vmas[inside_vma_idx].virt_addr, p->vmas[inside_vma_idx].len);
 
   freevma(p->pagetable, &(p->vmas[inside_vma_idx]), addr, len);
   return 0;
 }
 
 int munmap_p(uint64 addr, uint64 len, struct proc *p) {
-  printf("pid<%d> unmap addr: %p, len:%d\n", p->pid,addr, len);
+  // printf("pid<%d> unmap addr: %p, len:%d\n", p->pid,addr, len);
 
   int inside_vma_idx = find_inside_vmaidx(p->vmas, addr, 0);
 
-  printf("pid<%d>  find addr: %p, len: %d\n",p->pid, p->vmas[inside_vma_idx].virt_addr, p->vmas[inside_vma_idx].len);
+  // printf("pid<%d>  find addr: %p, len: %d\n",p->pid, p->vmas[inside_vma_idx].virt_addr, p->vmas[inside_vma_idx].len);
 
   freevma(p->pagetable, &(p->vmas[inside_vma_idx]), addr, len);
   return 0;

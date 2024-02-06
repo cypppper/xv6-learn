@@ -75,7 +75,7 @@ usertrap(void)
     uint64 pf_addr = r_stval();
     struct proc *p = myproc();
     int vma_idx = find_inside_vmaidx(p->vmas, pf_addr, 0);
-    printf("pid<%d> trap addr: %p\n",p->pid, r_stval());
+    // printf("pid<%d> trap addr: %p\n",p->pid, r_stval());
     if (vma_idx == -1) {
       panic("haha7");
     }
@@ -84,7 +84,7 @@ usertrap(void)
       panic("haha8");
     }
     uint64 pa = (uint64)kalloc();
-    printf("pid<%d>[trap pa]: %p\n", p->pid, pa);
+    // printf("pid<%d>[trap pa]: %p\n", p->pid, pa);
     int flags = PTE_U;
     if (p->vmas[vma_idx].can_read) {
       flags |= PTE_R;
