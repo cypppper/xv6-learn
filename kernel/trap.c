@@ -5,6 +5,9 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -67,6 +70,38 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if ((r_scause() == 13) || (r_scause() == 15)) {
+
+    uint64 pf_addr = r_stval();
+    struct proc *p = myproc();
+    int vma_idx = find_inside_vmaidx(p->vmas, pf_addr, 0);
+    printf("pid<%d> trap addr: %p\n",p->pid, r_stval());
+    if (vma_idx == -1) {
+      panic("haha7");
+    }
+    pte_t *pte_p = walk(p->pagetable, pf_addr, 0);
+    if (pte_p == 0) {
+      panic("haha8");
+    }
+    uint64 pa = (uint64)kalloc();
+    printf("pid<%d>[trap pa]: %p\n", p->pid, pa);
+    int flags = PTE_U;
+    if (p->vmas[vma_idx].can_read) {
+      flags |= PTE_R;
+    } 
+    if (p->vmas[vma_idx].can_write) {
+      flags |= PTE_W;
+    } 
+    mappages(p->pagetable, PGROUNDDOWN(pf_addr), PGSIZE, pa, flags);
+    struct file * fp = p->vmas[vma_idx].file;
+    ilock(fp->ip);
+    int ret = readi(fp->ip, 0, pa, (PGROUNDDOWN(pf_addr) - p->vmas[vma_idx].virt_addr), PGSIZE);
+    iunlock(fp->ip);
+
+    uint32 not_zero_area = (uint32)ret;
+    if (not_zero_area < PGSIZE) {
+      memset((void *)(pa + not_zero_area), 0, PGSIZE - not_zero_area);
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

@@ -5,6 +5,12 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
+#include "assert.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
+
 
 struct cpu cpus[NCPU];
 
@@ -124,7 +130,8 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
+  memset(p->vmas, 0, sizeof(struct VMA) * NVMA);
+  initlock(&(p->vma_lock), "vmalock");
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -155,11 +162,25 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  printf("free pid:%d\n", p->pid);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  if(p->pagetable)
+  if(p->pagetable) {
+    acquire(&(p->vma_lock));
+    for (int i = 0; i < NVMA; i++) {
+      if (p->vmas[i].is_used == 0) {
+        printf("pass %d\n", i);
+        continue;
+      }
+      printf("unmap hit\n");
+      munmap_p(p->vmas[i].virt_addr, p->vmas[i].len, p);
+    }
+    release(&(p->vma_lock));
+    printf("aaaaa\n");
     proc_freepagetable(p->pagetable, p->sz);
+  }
+
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -309,7 +330,16 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
-
+  acquire(&(myproc()->vma_lock));
+  memmove(np->vmas, p->vmas, sizeof(struct VMA) * NVMA);
+  for (int i = 0; i < NVMA; i++) {
+    if (np->vmas[i].is_used == 0) {
+      continue;
+    }
+    np->vmas[i].file = filedup(p->vmas[i].file);
+    lazy_map(np->pagetable, np->vmas[i].virt_addr, np->vmas[i].len);
+  }
+  release(&(myproc()->vma_lock));
   pid = np->pid;
 
   release(&np->lock);
@@ -685,4 +715,193 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64 find_free_addr(struct VMA *vmas, uint64 len) {
+  acquire(&(myproc()->vma_lock));
+  uint64 st = TRAPFRAME - len;
+  uint64 ed = TRAPFRAME;
+  for (int i = 0; i < NVMA; i++) {
+    if (vmas[i].is_used == 0) 
+      continue;
+    if (ed > vmas[i].virt_addr) {
+      ed = vmas[i].virt_addr;
+      st = ed - len;
+    }
+  }
+  release(&(myproc()->vma_lock));
+  return PGROUNDDOWN(st);
+}
+
+int find_unused_vmaidx(struct VMA *vmas) {
+  acquire(&(myproc()->vma_lock));
+  for (int i = 0; i < NVMA; i++) {
+    printf("enter idx: %d\n", i);
+    if (vmas[i].is_used == 0) {
+      release(&(myproc()->vma_lock));
+      return i;
+    }
+      
+  }
+  release(&(myproc()->vma_lock));
+  return -1;
+}
+
+uint64 mmap(uint64 length, int prot, int flags, int fd) {
+  struct proc* p = myproc();
+  int free_idx = find_unused_vmaidx(p->vmas);
+  
+  if(free_idx == -1) {
+    panic("haha1");
+  }
+  if(p->ofile[fd] == 0) {
+    panic("haha2");
+  }
+  struct VMA *vma = &(p->vmas[free_idx]);
+  {
+    vma->file = filedup(p->ofile[fd]);
+
+    vma->len = length;
+    // if (vma->file->ip->size < length) {
+    //   vma->len = vma->file->ip->size;
+    // }
+    
+    vma->virt_addr = find_free_addr(p->vmas, vma->len);
+
+    if (((prot & PROT_READ) != 0) && (vma->file->readable)) {
+      vma->can_read = 1;
+    } else if ((prot & PROT_READ) != 0) {
+      memset(vma, 0, sizeof(struct VMA));
+      return -1;
+    }
+    if (((flags & MAP_PRIVATE) != 0) || (((prot & PROT_WRITE) != 0) && (vma->file->writable))) {
+      vma->can_write = 1;
+    } else if ((prot & PROT_WRITE) != 0) {
+      memset(vma, 0, sizeof(struct VMA));
+      return -1;
+    }
+
+    if ((flags & MAP_SHARED) != 0) {
+      vma->is_shared = 1;
+    } else {
+      if((flags & MAP_PRIVATE) == 0) {
+        panic("haha3");
+      }
+    }
+
+    vma->is_used = 1;
+  }
+
+  lazy_map(p->pagetable, vma->virt_addr, vma->len);
+  return vma->virt_addr;
+}
+
+int find_inside_vmaidx(struct VMA *vmas, uint64 addr, uint64 len) {
+  acquire(&(myproc()->vma_lock));
+  for (int i = 0; i < NVMA; i++) {
+    if (addr >= vmas[i].virt_addr && addr < (vmas[i].len + vmas[i].virt_addr)) {
+      if((addr + len) > (vmas[i].virt_addr + vmas[i].len)) {
+        printf("wrong addr: %p len : %p\n", addr, len);
+        panic("haha4");
+      }
+      release(&(myproc()->vma_lock));
+      return i;
+    }
+  }
+  release(&(myproc()->vma_lock));
+  return -1;
+}
+
+
+void freevma(pagetable_t pgtbl, struct VMA *vma, uint64 start, uint64 len) {
+  pte_t *pte_p;
+  uint64 ed = (start + len);
+  uint64 st = (start);
+  uint64 pa_st, tot_len = len, wr_len = 0;
+
+
+  for (uint64 virt_addr = st; virt_addr < ed; virt_addr += wr_len) {
+    printf("at addr: %p\n", virt_addr);
+    pte_p = walk(pgtbl, virt_addr, 0); 
+    if ((*pte_p & PTE_V) == 0) {  // not trapped
+      *pte_p = 0;
+      wr_len = PGROUNDDOWN(virt_addr) + PGSIZE - virt_addr;
+      continue;
+    }
+    uint64 pa = PTE2PA(*pte_p);
+    if (vma->can_write && vma->is_shared) {  // should write back
+      if((*pte_p & PTE_W) == 0) {
+        panic("haha5");
+      }
+      if ((*pte_p & PTE_D) > 0) {  // is dirty
+        if (virt_addr == st) {  // first page write
+          pa_st = pa + st - PGROUNDDOWN(st);
+          if (tot_len > (PGSIZE - (st - PGROUNDDOWN(st)))) {
+            wr_len = (PGSIZE - (st - PGROUNDDOWN(st)));
+            tot_len -= wr_len;
+          } else {
+            wr_len = tot_len;
+            tot_len -= wr_len;
+          }
+        } else {
+          pa_st = pa;
+          if (tot_len > PGSIZE) {
+            wr_len = PGSIZE;
+            tot_len -= wr_len;
+          } else {
+            wr_len = tot_len;
+            tot_len -= wr_len;
+          }
+        }
+        begin_op();
+        ilock(vma->file->ip);
+        writei(vma->file->ip, 0, pa_st, virt_addr - st, wr_len);
+        iunlock(vma->file->ip);
+        end_op();
+      }
+    } else {
+      wr_len = PGROUNDDOWN(virt_addr) + PGSIZE - virt_addr;
+    }
+    
+    if (!((virt_addr == st) && (st % PGSIZE != 0))) {  // not (the first and not aligned) => not (not free) => free
+      kfree((void *)pa);
+    }
+    *pte_p = 0;
+  }
+  if (vma->virt_addr == start && vma->len == len) {
+    printf("  hit with para len: %d, addr: %p\n  vma len: %d addr %p\n", 
+            len, start, vma->len, vma->virt_addr);
+    fileclose(vma->file);
+    memset(vma, 0, sizeof(struct VMA));
+  } else {
+    if (vma->virt_addr == start) {
+      vma->virt_addr = start + len;
+      vma->len -= len;
+    } else {
+      vma->len -= len;
+    }
+  }
+  printf("finish freevma\n");
+}
+
+int munmap(uint64 addr, uint64 len) {
+  printf("pid<%d> unmap addr: %p, len:%d\n", myproc()->pid,addr, len);
+  struct proc* p = myproc();
+  int inside_vma_idx = find_inside_vmaidx(p->vmas, addr, 0);
+
+  printf("pid<%d>  find addr: %p, len: %d\n",myproc()->pid, p->vmas[inside_vma_idx].virt_addr, p->vmas[inside_vma_idx].len);
+
+  freevma(p->pagetable, &(p->vmas[inside_vma_idx]), addr, len);
+  return 0;
+}
+
+int munmap_p(uint64 addr, uint64 len, struct proc *p) {
+  printf("pid<%d> unmap addr: %p, len:%d\n", p->pid,addr, len);
+
+  int inside_vma_idx = find_inside_vmaidx(p->vmas, addr, 0);
+
+  printf("pid<%d>  find addr: %p, len: %d\n",p->pid, p->vmas[inside_vma_idx].virt_addr, p->vmas[inside_vma_idx].len);
+
+  freevma(p->pagetable, &(p->vmas[inside_vma_idx]), addr, len);
+  return 0;
 }

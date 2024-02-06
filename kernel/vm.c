@@ -5,6 +5,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "assert.h"
 
 /*
  * the kernel's page table.
@@ -171,6 +172,9 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+
+
+
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
@@ -273,6 +277,9 @@ uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
+#include "spinlock.h"
+
+#include "proc.h"
 // Recursively free page-table pages.
 // All leaf mappings must already have been removed.
 void
@@ -287,6 +294,7 @@ freewalk(pagetable_t pagetable)
       freewalk((pagetable_t)child);
       pagetable[i] = 0;
     } else if(pte & PTE_V){
+      printf("pid<%d>panic pte: %p, phy_addr: %p\n", myproc()->pid, pte, PTE2PA(pte));
       panic("freewalk: leaf");
     }
   }
@@ -297,7 +305,7 @@ freewalk(pagetable_t pagetable)
 // then free page-table pages.
 void
 uvmfree(pagetable_t pagetable, uint64 sz)
-{
+{ 
   if(sz > 0)
     uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
   freewalk(pagetable);
@@ -448,4 +456,17 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int lazy_map(pagetable_t pagetable, uint64 virt_addr, uint64 len) {
+  uint64 ed = virt_addr + len;
+  pte_t *pte_p;
+  if((virt_addr % PGSIZE) != 0) {
+    panic("haha6");
+  }
+  for (uint64 i_addr = virt_addr; i_addr < PGROUNDUP(ed); i_addr += PGSIZE) {
+    pte_p = walk(pagetable, i_addr, 1);
+    *pte_p = PTE_U;
+  }
+  return 0;
 }

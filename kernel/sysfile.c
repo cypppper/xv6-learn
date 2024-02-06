@@ -503,3 +503,26 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// uint64 mmap(uint64 length, int prot, int flags, int fd)
+uint64 sys_mmap(void) {
+  uint64 length;
+  int prot;
+  int flags;
+  int fd;
+
+  argaddr(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  
+  return mmap(length, prot, flags, fd);
+}
+uint64 sys_munmap(void) {
+  uint64 addr, len;
+
+  argaddr(0, &addr);
+  argaddr(1, &len);
+  munmap(addr, len);
+  return 0;
+}

@@ -1,7 +1,7 @@
-#ifdef LAB_MMAP
+// #ifdef LAB_MMAP
 typedef unsigned long size_t;
 typedef long int off_t;
-#endif
+// #endif
 struct buf;
 struct context;
 struct file;
@@ -12,6 +12,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct VMA;
 #ifdef LAB_NET
 struct mbuf;
 struct sock;
@@ -198,7 +199,14 @@ void            plic_complete(int);
 void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
-
+uint64          find_free_addr(struct VMA *vmas, uint64 len);
+int             lazy_map(pagetable_t pagetable, uint64 virt_addr, uint64 len);
+uint64          mmap(uint64 length, int prot, int flags, int fd);
+int             munmap(uint64 addr, uint64 len);
+int             find_unused_vmaidx(struct VMA *vmas);
+int             find_inside_vmaidx(struct VMA *vmas, uint64 addr, uint64 len);
+void            freevma(pagetable_t pgtbl, struct VMA *vma, uint64 start, uint64 len);
+int             munmap_p(uint64 addr, uint64 len, struct proc *p);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -244,3 +252,6 @@ int             sockread(struct sock *, uint64, int);
 int             sockwrite(struct sock *, uint64, int);
 void            sockrecvudp(struct mbuf*, uint32, uint16, uint16);
 #endif
+
+
+

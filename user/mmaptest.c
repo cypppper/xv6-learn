@@ -211,26 +211,33 @@ mmap_test(void)
   if(write(fd1, "12345", 5) != 5)
     err("write (1)");
   char *p1 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd1, 0);
+
   if(p1 == MAP_FAILED)
     err("mmap (5)");
+
   if (close(fd1) == -1)
     err("close (5)");
+
   if (unlink("mmap1") == -1)
     err("unlink (1)");
 
   int fd2;
   if((fd2 = open("mmap2", O_RDWR|O_CREATE)) < 0)
     err("open (6)");
+
   if(write(fd2, "67890", 5) != 5)
     err("write (2)");
+
   char *p2 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd2, 0);
   if(p2 == MAP_FAILED)
     err("mmap (6)");
+
   if (close(fd2) == -1)
     err("close (6)");
+
   if (unlink("mmap2") == -1)
     err("unlink (2)");
-
+printf("%s, %s\n", p1, p2);
   if(memcmp(p1, "12345", 5) != 0)
     err("mmap1 mismatch");
   if(memcmp(p2, "67890", 5) != 0)
